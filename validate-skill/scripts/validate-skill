@@ -1,0 +1,118 @@
+#!/bin/sh
+# validate-skill/scripts/validate-skill (BSD awk)
+set -eu
+
+usage() {
+  echo "usage: $0 <skill-name>/SKILL.md" >&2
+  exit 2
+}
+
+[ $# -eq 1 ] || usage
+file="$1"
+[ -f "$file" ] || { echo "error: file not found: $file" >&2; exit 2; }
+
+# Enforce canonical layout strictly: path must be <skill-name>/SKILL.md from repo root.
+norm="${file#./}"
+case "$norm" in
+  */SKILL.md) : ;;
+  *)
+    echo "error: file must be at <skill-name>/SKILL.md (got: $file)" >&2
+    exit 2
+    ;;
+esac
+
+if [ "$(printf '%s' "$norm" | awk -F/ '{print NF}')" -ne 2 ]; then
+  echo "error: file must be at <skill-name>/SKILL.md (got: $file)" >&2
+  exit 2
+fi
+
+skilldir="$(basename "$(dirname "$file")")"
+
+awk -v skilldir="$skilldir" -v filepath="$file" '
+function trim(s) {
+  sub(/^[[:space:]]+/, "", s)
+  sub(/[[:space:]]+$/, "", s)
+  return s
+}
+function dequote(s) {
+  s = trim(s)
+  if (s ~ /^".*"$/) { sub(/^"/, "", s); sub(/"$/, "", s) }
+  else if (s ~ /^'\''.*'\''$/) { sub(/^'\''/, "", s); sub(/'\''$/, "", s) }
+  return s
+}
+# Strip YAML inline comments for single-line scalars, respecting quotes.
+function strip_inline_comment(s,    i,c,out,in_s,in_d,prev) {
+  out=""; in_s=0; in_d=0; prev=""
+  for (i=1; i<=length(s); i++) {
+    c = substr(s,i,1)
+    if (c=="\"" && !in_s && prev!="\\") in_d = !in_d
+    else if (c=="'\''" && !in_d) in_s = !in_s
+    if (c=="#" && !in_s && !in_d) break
+    out = out c
+    prev = c
+  }
+  return out
+}
+function err(msg) { errors++; print "error: " msg > "/dev/stderr" }
+function warn(msg) { warnings++; print "warn: " msg > "/dev/stderr" }
+
+BEGIN {
+  errors=0; warnings=0
+  in_fm=0; fm_delims=0
+  name=""; desc=""
+}
+
+NR==1 {
+  if ($0 != "---") err(filepath ": missing YAML front-matter start delimiter (first line must be ---)")
+  else { in_fm=1; fm_delims=1 }
+  next
+}
+
+{
+  if ($0 == "---") {
+    fm_delims++
+    if (fm_delims == 2) in_fm=0
+    next
+  }
+
+  if (in_fm) {
+    if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+
+    if (match($0, /^[[:space:]]*([A-Za-z0-9_-]+)[[:space:]]*:[[:space:]]*(.*)$/, m)) {
+      k = m[1]
+      v = strip_inline_comment(m[2])
+      v = dequote(v)
+
+      if (k == "name") name = v
+      else if (k == "description") desc = v
+      next
+    }
+
+    warn(filepath ": non key/value line in front-matter (multi-line YAML not validated): " $0)
+    next
+  }
+}
+
+END {
+  if (fm_delims < 2) err(filepath ": missing YAML front-matter end delimiter (second ---)")
+
+  if (name == "") err(filepath ": front-matter missing required field: name")
+  if (desc == "") err(filepath ": front-matter missing required field: description")
+
+  if (name != "") {
+    if (length(name) < 1 || length(name) > 64) err(filepath ": name length must be 1..64 chars: " name)
+    if (name !~ /^[a-z0-9]+(-[a-z0-9]+)*$/)
+      err(filepath ": name must match ^[a-z0-9]+(-[a-z0-9]+)*$ (lowercase, digits, hyphens; no leading/trailing or consecutive hyphens): " name)
+
+    if (name != skilldir)
+      err(filepath ": name must match directory name; front-matter name=" name " dir=" skilldir)
+  }
+
+  if (desc != "") {
+    if (length(desc) < 1 || length(desc) > 1024) err(filepath ": description length must be 1..1024 chars")
+  }
+
+  if (errors > 0) exit 1
+  exit 0
+}
+' "$file"
