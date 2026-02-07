@@ -9,14 +9,14 @@ Skills are an API surface. Selection is driven by front-matter metadata; operati
 - AGENTS.md
 - CHANGELOG.md
 - README.md
-- <skill-name>/
+- `<skill-name>`/
   - SKILL.md
   - scripts/ (optional)
   - references/ (optional)
   - assets/ (optional)
 - .infra/
   - eval/
-    - <skill-name>/ (optional per-skill eval fixtures and smoke checks)
+    - `<skill-name>`/ (optional per-skill eval fixtures and smoke checks)
 
 ## Skill format
 
