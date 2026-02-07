@@ -9,7 +9,7 @@ metadata:
 
 # Objective
 
-Produce subsystem-level analysis that is actionable for implementation:
+Produce subsystem-level analysis that is actionable for implementation and closeout:
 
 - Explain each subsystem's purpose.
 - Explain architectural and programmatic behavior from real code paths.
@@ -65,6 +65,11 @@ Optional but recommended:
 8. Verify artifacts and consistency:
    - Every subsystem doc exists and follows required sections.
    - TODO entries are testable and include concrete validation commands or suites.
+9. Finalize after chunk implementation is complete:
+   - Append an implementation summary to `CHANGELOG.md` with completed chunks and commit references (`<hash> <message>`).
+   - Remove `TODO.md` when all planned chunks are complete.
+   - Update each subsystem doc's non-style improvement section from proposed findings to implemented changes.
+   - Keep unresolved items under feature-aligned improvements or follow-up notes.
 
 # Output Contract
 
@@ -72,6 +77,12 @@ Primary outputs:
 
 - `docs/subsystems/<subsystem>.md` for each subsystem in scope.
 - `TODO.md` with descending, test-gated checklist chunks.
+
+Finalization outputs (after implementation completion):
+
+- `CHANGELOG.md` appended with chunk summary and commit list.
+- `TODO.md` removed once all chunk items are complete.
+- Subsystem docs updated so Section 3 reflects landed fixes instead of proposed fixes.
 
 Each subsystem doc must include:
 
@@ -121,6 +132,10 @@ Minimum verification:
 4. If implementation is requested:
    - Per chunk: unit tests + targeted integration suites.
    - Once all chunks land: full gate (`go test ./...`, lint/vet, full integration suites as applicable).
+5. If finalization is requested:
+   - Confirm changelog entry exists and includes chunks plus commit hashes/messages.
+   - Confirm `TODO.md` is removed only when all chunk items are done.
+   - Confirm subsystem docs reflect implemented improvements, not speculative ones.
 
 # Local Resources
 
