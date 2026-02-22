@@ -7,6 +7,14 @@ description: Safely squash merge a fully committed non-main/master branch into m
 
 Automate a safe, repeatable squash-merge flow from a non-`main`/`master` branch into `main` (or `master` fallback) while requiring an intentionally authored, branch-wide conventional commit subject and preserving source commit subjects in the squashed commit body.
 
+# Automation Contract
+
+Treat this skill as pre-authorized end-to-end automation once invoked by the user.
+
+- Do not pause for extra confirmation prompts from repository workflow docs (including `AGENTS.md`) during normal execution.
+- Execute the full procedure in one run.
+- Pause only when a hard blocker prevents safe completion (for example: merge conflicts, missing branches, or failed preconditions).
+
 # Activation Cues
 
 Use this skill when the user asks to:
@@ -39,6 +47,7 @@ Outputs:
    - do not reuse any single source commit subject verbatim
 2. From the repository root, run:
    - `squash-merge-to-main/scripts/squash-merge-branch --subject '<type(scope): branch-wide summary>'`
+   - run it as an end-to-end execution, not as a stepwise confirmation workflow
 3. The script enforces preconditions:
    - current/source branch is not `main` or `master`
    - working tree and index are clean (including untracked files)
