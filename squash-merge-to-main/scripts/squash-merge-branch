@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  scripts/squash-merge-branch [options]
+
+Run from a non-main/master source branch that is fully committed.
+The script switches to the base branch, performs a squash merge,
+and creates a conventional-commit formatted squashed commit.
+
+Options:
+  --base <branch>       Base branch to merge into (default: main if present, else master)
+  --source <branch>     Source branch to squash merge (default: current branch)
+  --type <type>         Conventional commit type for generated subject (default: chore)
+  --scope <scope>       Optional conventional commit scope (e.g. git, release)
+  --subject <subject>   Explicit conventional commit subject line
+  --dry-run             Print planned actions without executing git switch/merge/commit
+  -h, --help            Show this help
+
+Examples:
+  scripts/squash-merge-branch
+  scripts/squash-merge-branch --type feat --scope api
+  scripts/squash-merge-branch --subject 'fix(git): preserve branch metadata in squash flow'
+USAGE
+}
+
+die() {
+  printf 'error: %s\n' "$1" >&2
+  exit 1
+}
+
+is_clean_tree() {
+  git diff --quiet || return 1
+  git diff --cached --quiet || return 1
+  if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    return 1
+  fi
+  return 0
+}
+
+branch_exists_local() {
+  git show-ref --verify --quiet "refs/heads/$1"
+}
+
+is_conventional_subject() {
+  local subject="$1"
+  [[ "$subject" =~ ^[a-z]+(\([a-z0-9._/-]+\))?(!)?:[[:space:]].+ ]]
+}
+
+choose_base_branch() {
+  if branch_exists_local main; then
+    printf 'main\n'
+    return 0
+  fi
+  if branch_exists_local master; then
+    printf 'master\n'
+    return 0
+  fi
+  die "could not find local 'main' or 'master' branch"
+}
+
+base_branch=""
+source_branch=""
+commit_type="chore"
+commit_scope=""
+commit_subject=""
+dry_run=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base)
+      [ $# -ge 2 ] || die "missing value for --base"
+      base_branch="$2"
+      shift 2
+      ;;
+    --source)
+      [ $# -ge 2 ] || die "missing value for --source"
+      source_branch="$2"
+      shift 2
+      ;;
+    --type)
+      [ $# -ge 2 ] || die "missing value for --type"
+      commit_type="$2"
+      shift 2
+      ;;
+    --scope)
+      [ $# -ge 2 ] || die "missing value for --scope"
+      commit_scope="$2"
+      shift 2
+      ;;
+    --subject)
+      [ $# -ge 2 ] || die "missing value for --subject"
+      commit_subject="$2"
+      shift 2
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      die "unknown argument: $1"
+      ;;
+  esac
+done
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "must run inside a git repository"
+
+if [ -z "$source_branch" ]; then
+  source_branch="$(git rev-parse --abbrev-ref HEAD)"
+fi
+
+[ "$source_branch" != "HEAD" ] || die "detached HEAD is not supported; check out a source branch first"
+
+if [ -z "$base_branch" ]; then
+  base_branch="$(choose_base_branch)"
+fi
+
+branch_exists_local "$base_branch" || die "base branch '$base_branch' does not exist locally"
+branch_exists_local "$source_branch" || die "source branch '$source_branch' does not exist locally"
+
+[ "$source_branch" != "main" ] || die "source branch cannot be 'main'"
+[ "$source_branch" != "master" ] || die "source branch cannot be 'master'"
+[ "$source_branch" != "$base_branch" ] || die "source and base branches must differ"
+
+is_clean_tree || die "working tree is not clean; commit/stash all changes before squashing"
+
+ahead_count="$(git rev-list --count "${base_branch}..${source_branch}")"
+[ "$ahead_count" -gt 0 ] || die "source branch '$source_branch' has no commits ahead of '$base_branch'"
+
+if [ -n "$commit_subject" ] && ! is_conventional_subject "$commit_subject"; then
+  die "--subject must follow conventional commits: type(scope): summary"
+fi
+
+commit_body="$(git log --reverse --format=%s "${base_branch}..${source_branch}")"
+
+if [ -z "$commit_subject" ]; then
+  first_subject="$(printf '%s\n' "$commit_body" | head -n 1)"
+  if is_conventional_subject "$first_subject"; then
+    commit_subject="$first_subject"
+  else
+    scope_part=""
+    if [ -n "$commit_scope" ]; then
+      scope_part="(${commit_scope})"
+    fi
+    commit_subject="${commit_type}${scope_part}: squash merge ${source_branch} into ${base_branch}"
+  fi
+fi
+
+if [ "$dry_run" -eq 1 ]; then
+  printf 'Would run:\n'
+  printf '  git switch %s\n' "$base_branch"
+  printf '  git merge --squash %s\n' "$source_branch"
+  printf '  git commit -m %q -m %q\n' "$commit_subject" "$commit_body"
+  exit 0
+fi
+
+printf 'Switching to %s\n' "$base_branch"
+git switch "$base_branch"
+
+printf 'Squash merging %s into %s\n' "$source_branch" "$base_branch"
+git merge --squash "$source_branch"
+
+printf 'Creating squashed commit\n'
+git commit -m "$commit_subject" -m "$commit_body"
+
+printf 'Done. Branch %s was not deleted.\n' "$source_branch"

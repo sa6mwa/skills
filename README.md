@@ -104,3 +104,6 @@ Defaults that keep the library useful at scale:
 - `validate-skill`
   - Path: `validate-skill/SKILL.md`
   - Use when you need deterministic validation of a skill's canonical path and `SKILL.md` front-matter invariants.
+- `squash-merge-to-main`
+  - Path: `squash-merge-to-main/SKILL.md`
+  - Use when you need to squash-merge a fully committed non-main/master branch into `main` or `master` with a conventional-commit squashed commit while keeping the source branch.
