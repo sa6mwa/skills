@@ -13,15 +13,13 @@ and creates a conventional-commit formatted squashed commit.
 Options:
   --base <branch>       Base branch to merge into (default: main if present, else master)
   --source <branch>     Source branch to squash merge (default: current branch)
-  --type <type>         Conventional commit type for generated subject (default: chore)
-  --scope <scope>       Optional conventional commit scope (e.g. git, release)
-  --subject <subject>   Explicit conventional commit subject line
+  --subject <subject>   Required conventional-commit subject line for the squashed commit
   --dry-run             Print planned actions without executing git switch/merge/commit
   -h, --help            Show this help
 
 Examples:
-  scripts/squash-merge-branch
-  scripts/squash-merge-branch --type feat --scope api
+  scripts/squash-merge-branch --subject 'feat(api): unify request validation flow'
+  scripts/squash-merge-branch --dry-run --subject 'fix(git): preserve merge intent in squash subject'
   scripts/squash-merge-branch --subject 'fix(git): preserve branch metadata in squash flow'
 USAGE
 }
@@ -63,8 +61,6 @@ choose_base_branch() {
 
 base_branch=""
 source_branch=""
-commit_type="chore"
-commit_scope=""
 commit_subject=""
 dry_run=0
 
@@ -78,16 +74,6 @@ while [ $# -gt 0 ]; do
     --source)
       [ $# -ge 2 ] || die "missing value for --source"
       source_branch="$2"
-      shift 2
-      ;;
-    --type)
-      [ $# -ge 2 ] || die "missing value for --type"
-      commit_type="$2"
-      shift 2
-      ;;
-    --scope)
-      [ $# -ge 2 ] || die "missing value for --scope"
-      commit_scope="$2"
       shift 2
       ;;
     --subject)
@@ -133,24 +119,15 @@ is_clean_tree || die "working tree is not clean; commit/stash all changes before
 ahead_count="$(git rev-list --count "${base_branch}..${source_branch}")"
 [ "$ahead_count" -gt 0 ] || die "source branch '$source_branch' has no commits ahead of '$base_branch'"
 
-if [ -n "$commit_subject" ] && ! is_conventional_subject "$commit_subject"; then
+if [ -z "$commit_subject" ]; then
+  die "--subject is required and must summarize the full branch delta (not a single commit subject)"
+fi
+
+if ! is_conventional_subject "$commit_subject"; then
   die "--subject must follow conventional commits: type(scope): summary"
 fi
 
 commit_body="$(git log --reverse --format=%s "${base_branch}..${source_branch}")"
-
-if [ -z "$commit_subject" ]; then
-  first_subject="$(printf '%s\n' "$commit_body" | head -n 1)"
-  if is_conventional_subject "$first_subject"; then
-    commit_subject="$first_subject"
-  else
-    scope_part=""
-    if [ -n "$commit_scope" ]; then
-      scope_part="(${commit_scope})"
-    fi
-    commit_subject="${commit_type}${scope_part}: squash merge ${source_branch} into ${base_branch}"
-  fi
-fi
 
 if [ "$dry_run" -eq 1 ]; then
   printf 'Would run:\n'

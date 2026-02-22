@@ -5,7 +5,7 @@ description: Safely squash merge a fully committed non-main/master branch into m
 
 # Objective
 
-Automate a safe, repeatable squash-merge flow from a non-`main`/`master` branch into `main` (or `master` fallback) while preserving source commit subjects in the squashed commit body.
+Automate a safe, repeatable squash-merge flow from a non-`main`/`master` branch into `main` (or `master` fallback) while requiring an intentionally authored, branch-wide conventional commit subject and preserving source commit subjects in the squashed commit body.
 
 # Activation Cues
 
@@ -33,27 +33,30 @@ Outputs:
 
 # Procedure
 
-1. From the repository root, run:
-   - `squash-merge-to-main/scripts/squash-merge-branch`
-2. The script enforces preconditions:
+1. Determine the source branch scope and author a branch-level subject:
+   - inspect branch delta: `git diff --stat <base>...<source>` and `git log --oneline <base>..<source>`
+   - summarize the complete branch outcome in one Conventional Commit subject (`type(scope): summary`)
+   - do not reuse any single source commit subject verbatim
+2. From the repository root, run:
+   - `squash-merge-to-main/scripts/squash-merge-branch --subject '<type(scope): branch-wide summary>'`
+3. The script enforces preconditions:
    - current/source branch is not `main` or `master`
    - working tree and index are clean (including untracked files)
    - source branch is ahead of base branch
-3. The script determines base branch:
+4. The script determines base branch:
    - use local `main` when present
    - otherwise use local `master`
-4. The script executes:
+5. The script executes:
    - `git switch <base>`
    - `git merge --squash <source>`
    - `git commit -m '<conventional subject>' -m "$(git log --reverse --format=%s <base>..<source>)"`
-5. Do not delete the source branch; leave branch cleanup to the developer.
+6. Do not delete the source branch; leave branch cleanup to the developer.
 
 Optional overrides:
 
 - `--base <branch>` to force base branch
 - `--source <branch>` to merge a non-current source branch
-- `--type <type>` and `--scope <scope>` to customize generated conventional subject
-- `--subject '<type(scope): summary>'` to set explicit conventional subject
+- `--subject '<type(scope): summary>'` to set required branch-wide conventional subject
 - `--dry-run` to print planned commands only
 
 # Failure Modes
@@ -64,6 +67,8 @@ Optional overrides:
   - Script aborts with actionable error.
 - Source has no commits ahead of base:
   - Script aborts and does not switch branches.
+- Missing `--subject`:
+  - Script aborts and requires an explicitly authored branch-wide conventional subject.
 - Squash merge conflicts:
   - `git merge --squash` exits non-zero; resolve conflicts or abort manually before retry.
 - Invalid explicit subject format:
@@ -86,9 +91,9 @@ Optional overrides:
 # Verification
 
 1. Preflight check without side effects:
-   - `squash-merge-to-main/scripts/squash-merge-branch --dry-run`
+   - `squash-merge-to-main/scripts/squash-merge-branch --dry-run --subject '<type(scope): branch-wide summary>'`
 2. Execute merge:
-   - `squash-merge-to-main/scripts/squash-merge-branch`
+   - `squash-merge-to-main/scripts/squash-merge-branch --subject '<type(scope): branch-wide summary>'`
 3. Confirm result on base branch:
    - `git log -1 --format=%s` returns conventional-commit subject
    - `git log -1 --format=%b` lists original commit subjects in order
